@@ -940,10 +940,7 @@ fn apply_morphology(
 ) -> Result<Image, Error> {
     let mut pixmap = input.into_color_space(cs)?.take()?;
 
-    let (rx, ry) = match scale_coordinates(fe.radius_x().get(), fe.radius_y().get(), ts) {
-        Some(v) => v,
-        None => return Ok(Image::from_image(pixmap, cs)),
-    };
+    let (rx, ry) = scale_coordinates(fe.radius_x().get(), fe.radius_y().get(), ts);
 
     if !(rx > 0.0 && ry > 0.0) {
         pixmap.clear();
@@ -968,10 +965,7 @@ fn apply_displacement_map(
 
     let mut pixmap = tiny_skia::Pixmap::try_create(region.width(), region.height())?;
 
-    let (sx, sy) = match scale_coordinates(fe.scale(), fe.scale(), ts) {
-        Some(v) => v,
-        None => return Ok(Image::from_image(pixmap1, cs)),
-    };
+    let (sx, sy) = scale_coordinates(fe.scale(), fe.scale(), ts);
 
     displacement_map::apply(
         fe,
@@ -1117,7 +1111,7 @@ fn apply_to_canvas(input: Image, pixmap: &mut tiny_skia::Pixmap) -> Result<(), E
 ///
 /// If the last flag is set, then a box blur should be used. Or IIR otherwise.
 fn resolve_std_dev(std_dx: f32, std_dy: f32, ts: usvg::Transform) -> Option<(f64, f64, bool)> {
-    let (mut std_dx, mut std_dy) = scale_coordinates(std_dx, std_dy, ts)?;
+    let (mut std_dx, mut std_dy) = scale_coordinates(std_dx, std_dy, ts);
 
     // 'A negative value or a value of zero disables the effect of the given filter primitive
     // (i.e., the result is the filter input image).'
@@ -1141,9 +1135,15 @@ fn resolve_std_dev(std_dx: f32, std_dy: f32, ts: usvg::Transform) -> Option<(f64
     Some((std_dx as f64, std_dy as f64, box_blur))
 }
 
-fn scale_coordinates(x: f32, y: f32, ts: usvg::Transform) -> Option<(f32, f32)> {
+/// Scales a magnitude *pair* (e.g. a blur or morphology radius) by the per-axis
+/// scale factors of the current transform, i.e. the lengths of its matrix rows.
+///
+/// Rotation and skew still contribute their magnitude here; what is lost is the
+/// direction. That is right for a radius and wrong for a vector, which is what
+/// [`transform_coordinates`] is for.
+fn scale_coordinates(x: f32, y: f32, ts: usvg::Transform) -> (f32, f32) {
     let (sx, sy) = ts.get_scale();
-    Some((x * sx, y * sy))
+    (x * sx, y * sy)
 }
 
 /// Maps a coordinate *vector* (e.g. `feOffset`'s `dx`/`dy`) through the linear
@@ -1185,7 +1185,7 @@ mod tests {
 
         // The old, scale-only behaviour would have returned (10, 0), since the
         // scale factors of a pure rotation are both 1.
-        let (sx, sy) = scale_coordinates(10.0, 0.0, ts).unwrap();
+        let (sx, sy) = scale_coordinates(10.0, 0.0, ts);
         assert!(approx_eq(sx, 10.0) && approx_eq(sy, 0.0));
     }
 
